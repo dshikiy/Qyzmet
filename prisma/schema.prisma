@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  PROVIDER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  NEGOTIATING
+  AGREED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum NegotiationStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+}
+
+enum CommissionStatus {
+  PENDING
+  UNPAID
+  CONFIRMED
+  PAID
+  WAIVED
+}
+
+enum PromotionType {
+  FEATURED_LISTING
+  TOP_SEARCH
+  CATEGORY_SPOTLIGHT
+  PREMIUM
+  PROMOTED
+  ADVERTISING
+}
+
+enum PromotionStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  providerProfile  ProviderProfile?
+  customerRequests ServiceRequest[] @relation("CustomerRequests")
+  negotiations     Negotiation[]    @relation("NegotiationProposer")
+  reviews          Review[]         @relation("CustomerReviews")
+
+  @@index([role])
+}
+
+model ProviderProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  description     String   @default("")
+  experience      String   @default("")
+  city            String   @default("Ақтау")
+  publicLocation  String   @default("Ақтау")
+  latitude        Float?
+  longitude       Float?
+  indicativePrice Decimal  @default(0) @db.Decimal(12, 2)
+  avatarUrl       String?
+  isPremium       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categories ProviderCategory[]
+  requests   ServiceRequest[]   @relation("ProviderRequests")
+  reviews    Review[]           @relation("ProviderReviews")
+  promotions Promotion[]
+
+  @@index([city])
+  @@index([isPremium])
+  @@index([latitude, longitude])
+}
+
+model ServiceCategory {
+  id        String   @id @default(cuid())
+  nameKk    String
+  nameRu    String?
+  slug      String   @unique
+  icon      String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  providers ProviderCategory[]
+  requests  ServiceRequest[]
+
+  @@index([isActive, sortOrder])
+}
+
+model ProviderCategory {
+  providerId String
+  categoryId String
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  category ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([providerId, categoryId])
+  @@index([categoryId])
+}
+
+model ServiceRequest {
+  id                String      @id @default(cuid())
+  customerId        String
+  providerId        String
+  categoryId        String
+  description       String
+  address           String
+  preferredDate     String
+  preferredTime     String
+  status            OrderStatus @default(PENDING)
+  agreedPrice       Decimal?    @db.Decimal(12, 2)
+  agreedDateTime    String?
+  agreedScope       String?
+  customerConfirmed Boolean     @default(false)
+  providerConfirmed Boolean     @default(false)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  customer     User            @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
+  provider     ProviderProfile @relation("ProviderRequests", fields: [providerId], references: [id], onDelete: Cascade)
+  category     ServiceCategory @relation(fields: [categoryId], references: [id])
+  negotiations Negotiation[]
+  review       Review?
+  commission   Commission?
+
+  @@index([customerId, status])
+  @@index([providerId, status])
+  @@index([categoryId])
+  @@index([createdAt])
+}
+
+model Negotiation {
+  id               String            @id @default(cuid())
+  orderId          String
+  proposedById     String
+  proposedPrice    Decimal           @db.Decimal(12, 2)
+  proposedDateTime String
+  proposedScope    String
+  status           NegotiationStatus @default(PROPOSED)
+  createdAt        DateTime          @default(now())
+
+  order      ServiceRequest @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  proposedBy User           @relation("NegotiationProposer", fields: [proposedById], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  orderId    String   @unique
+  customerId String
+  providerId String
+  rating     Int
+  comment    String
+  isVisible  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  order    ServiceRequest  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer User            @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  provider ProviderProfile @relation("ProviderReviews", fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, isVisible])
+  @@index([customerId])
+}
+
+model Commission {
+  id        String           @id @default(cuid())
+  orderId   String           @unique
+  amount    Decimal          @db.Decimal(12, 2)
+  rate      Decimal          @db.Decimal(5, 4)
+  status    CommissionStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  order ServiceRequest @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+model Promotion {
+  id         String          @id @default(cuid())
+  providerId String
+  type       PromotionType   @default(FEATURED_LISTING)
+  startsAt   DateTime
+  expiresAt  DateTime
+  status     PromotionStatus @default(ACTIVE)
+  createdAt  DateTime        @default(now())
+
+  provider ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, status])
+  @@index([status, expiresAt])
+}
+
+model Advertisement {
+  id             String   @id @default(cuid())
+  title          String
+  advertiserName String
+  placement      String
+  targetUrl      String?
+  startsAt       DateTime
+  expiresAt      DateTime
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([isActive, expiresAt])
+}
