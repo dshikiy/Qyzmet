@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { auth } from "@/lib/auth/auth";
+import { getRequestUser } from "@/lib/auth/mobile-token";
 import { prisma } from "@/lib/db/prisma";
 import { providerProfileSchema } from "@/lib/validations/provider";
 import { getCityByName } from "@/constants/cities";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "PROVIDER") {
+export async function GET(request: Request) {
+  const user = await getRequestUser(request);
+  if (!user || user.role !== "PROVIDER") {
     return NextResponse.json({ error: "Рұқсат жоқ." }, { status: 403 });
   }
 
   const profile = await prisma.providerProfile.findUnique({
-    where: { userId: session.user.id },
+    where: { userId: user.id },
     include: {
       user: { select: { name: true, email: true } },
       categories: { select: { categoryId: true } },
@@ -23,8 +23,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  const session = await auth();
-  if (!session?.user || session.user.role !== "PROVIDER") {
+  const user = await getRequestUser(request);
+  if (!user || user.role !== "PROVIDER") {
     return NextResponse.json({ error: "Рұқсат жоқ." }, { status: 403 });
   }
 
@@ -72,13 +72,13 @@ export async function PUT(request: Request) {
     const profile = await prisma.$transaction(async (tx) => {
       if (name) {
         await tx.user.update({
-          where: { id: session.user.id },
+          where: { id: user.id },
           data: { name },
         });
       }
 
       const upserted = await tx.providerProfile.upsert({
-        where: { userId: session.user.id },
+        where: { userId: user.id },
         update: {
           description,
           experience,
@@ -89,7 +89,7 @@ export async function PUT(request: Request) {
           indicativePrice: new Prisma.Decimal(indicativePrice),
         },
         create: {
-          userId: session.user.id,
+          userId: user.id,
           description,
           experience,
           city,

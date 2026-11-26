@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { auth } from "@/lib/auth/auth";
+import { getRequestUser } from "@/lib/auth/mobile-token";
 import { prisma } from "@/lib/db/prisma";
 import { updateOrderStatusSchema } from "@/lib/validations/order";
 import { canUserPerformOrderAction } from "@/lib/permissions/order-transitions";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -38,9 +38,9 @@ export async function GET(
     return NextResponse.json({ error: "Тапсырыс табылмады." }, { status: 404 });
   }
 
-  const isCustomer = order.customerId === session.user.id;
-  const isProvider = order.provider.userId === session.user.id;
-  const isAdmin = session.user.role === "ADMIN";
+  const isCustomer = order.customerId === user.id;
+  const isProvider = order.provider.userId === user.id;
+  const isAdmin = user.role === "ADMIN";
 
   if (!isCustomer && !isProvider && !isAdmin) {
     return NextResponse.json({ error: "Рұқсат жоқ." }, { status: 403 });
@@ -53,8 +53,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -81,11 +81,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Тапсырыс табылмады." }, { status: 404 });
     }
 
-    const isCustomer = existing.customerId === session.user.id;
-    const isProvider = existing.provider.userId === session.user.id;
+    const isCustomer = existing.customerId === user.id;
+    const isProvider = existing.provider.userId === user.id;
 
     const check = canUserPerformOrderAction({
-      role: session.user.role,
+      role: user.role,
       isCustomer,
       isProvider,
       currentStatus: existing.status,

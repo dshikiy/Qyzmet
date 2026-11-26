@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth/auth";
+import { getRequestUser } from "@/lib/auth/mobile-token";
 import { prisma } from "@/lib/db/prisma";
 
 const updateProfileSchema = z.object({
@@ -8,8 +8,8 @@ const updateProfileSchema = z.object({
 });
 
 export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const authUser = await getRequestUser(request);
+  if (!authUser) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -24,7 +24,7 @@ export async function PATCH(request: Request) {
     }
 
     const user = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: authUser.id },
       data: { name: parsed.data.name },
       select: { id: true, name: true, email: true, role: true },
     });

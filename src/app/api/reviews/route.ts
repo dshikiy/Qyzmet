@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
+import { getRequestUser } from "@/lib/auth/mobile-token";
 import { prisma } from "@/lib/db/prisma";
 import { createReviewSchema } from "@/lib/validations/review";
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Тапсырыс табылмады." }, { status: 404 });
     }
 
-    if (order.customerId !== session.user.id) {
+    if (order.customerId !== user.id) {
       return NextResponse.json(
         { error: "Тек тапсырыс беруші ғана пікір қалдыра алады." },
         { status: 403 }
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     const review = await prisma.review.create({
       data: {
         orderId: order.id,
-        customerId: session.user.id,
+        customerId: user.id,
         providerId: order.providerId,
         rating,
         comment,

@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
+import { getRequestUser } from "@/lib/auth/mobile-token";
 import { prisma } from "@/lib/db/prisma";
 import { createOrderSchema } from "@/lib/validations/order";
 
-export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+export async function GET(request: Request) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
-
-  const user = session.user;
   const where =
     user.role === "ADMIN"
       ? {}
@@ -39,8 +37,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -69,7 +67,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Маман табылмады." }, { status: 404 });
     }
 
-    if (provider.userId === session.user.id) {
+    if (provider.userId === user.id) {
       return NextResponse.json(
         { error: "Өз профиліңізге тапсырыс бере алмайсыз." },
         { status: 400 }
@@ -87,7 +85,7 @@ export async function POST(request: Request) {
 
     const order = await prisma.serviceRequest.create({
       data: {
-        customerId: session.user.id,
+        customerId: user.id,
         providerId: provider.id,
         categoryId: category.id,
         description,

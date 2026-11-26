@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { auth } from "@/lib/auth/auth";
+import { getRequestUser } from "@/lib/auth/mobile-token";
 import { prisma } from "@/lib/db/prisma";
 import { negotiationProposalSchema } from "@/lib/validations/order";
 
@@ -8,8 +8,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -41,8 +41,8 @@ export async function POST(
       return NextResponse.json({ error: "Тапсырыс табылмады." }, { status: 404 });
     }
 
-    const isCustomer = order.customerId === session.user.id;
-    const isProvider = order.provider.userId === session.user.id;
+    const isCustomer = order.customerId === user.id;
+    const isProvider = order.provider.userId === user.id;
 
     if (!isCustomer && !isProvider) {
       return NextResponse.json({ error: "Рұқсат жоқ." }, { status: 403 });
@@ -66,7 +66,7 @@ export async function POST(
       const negotiation = await tx.negotiation.create({
         data: {
           orderId: id,
-          proposedById: session.user.id,
+          proposedById: user.id,
           proposedPrice: new Prisma.Decimal(proposedPrice),
           proposedDateTime,
           proposedScope,
@@ -100,11 +100,11 @@ export async function POST(
 }
 
 export async function PATCH(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getRequestUser(request);
+  if (!user) {
     return NextResponse.json({ error: "Авторизация қажет." }, { status: 401 });
   }
 
@@ -127,8 +127,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Тапсырыс табылмады." }, { status: 404 });
     }
 
-    const isCustomer = order.customerId === session.user.id;
-    const isProvider = order.provider.userId === session.user.id;
+    const isCustomer = order.customerId === user.id;
+    const isProvider = order.provider.userId === user.id;
 
     if (!isCustomer && !isProvider) {
       return NextResponse.json({ error: "Рұқсат жоқ." }, { status: 403 });
