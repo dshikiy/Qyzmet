@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
 import { registerSchema } from "@/lib/validations/auth";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { DEFAULT_CITY } from "@/constants/cities";
+import { DEFAULT_CITY, getCityByName } from "@/constants/cities";
 import { signMobileToken } from "@/lib/auth/mobile-token";
+
+const mobileRegisterSchema = registerSchema.extend({
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+77\d{9}$/, "Қазақстандық дұрыс мобильді нөмірді енгізіңіз (+77XXXXXXXXX)")
+    .optional(),
+  city: z.string().trim().min(2).max(60).optional(),
+});
 
 export async function POST(request: Request) {
   try {
@@ -18,7 +28,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const parsed = registerSchema.safeParse(body);
+    const parsed = mobileRegisterSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         {
@@ -29,7 +39,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, email, password, role } = parsed.data;
+    const { name, email, password, role, city } = parsed.data;
+    const cityObj = city ? getCityByName(city) : DEFAULT_CITY;
+
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { id: true },
@@ -55,10 +67,10 @@ export async function POST(request: Request) {
         const profile = await tx.providerProfile.create({
           data: {
             userId: user.id,
-            city: DEFAULT_CITY.nameKk,
-            publicLocation: DEFAULT_CITY.nameKk,
-            latitude: DEFAULT_CITY.latitude,
-            longitude: DEFAULT_CITY.longitude,
+            city: cityObj.nameKk,
+            publicLocation: cityObj.nameKk,
+            latitude: cityObj.latitude,
+            longitude: cityObj.longitude,
             description: "",
             experience: "",
             indicativePrice: 0,
@@ -87,7 +99,7 @@ export async function POST(request: Request) {
           name: created.user.name,
           email: created.user.email,
           role: created.user.role,
-          city: DEFAULT_CITY.nameKk,
+          city: cityObj.nameKk,
           providerProfileId: created.providerProfileId,
           createdAt: created.user.createdAt.toISOString(),
         },
@@ -102,4 +114,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
